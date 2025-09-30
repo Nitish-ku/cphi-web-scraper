@@ -7,7 +7,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
-from bs4 import BeautifulSoup
 
 URL = "https://exhibitors.cphi.com/cpww25/"
 
@@ -56,10 +55,16 @@ def parse_exhibitors(driver):
             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", card)
             time.sleep(0.5)
 
-            # Click to expand the details section
+            # --- Data from visible part (Header) ---
+            name = card.find_element(By.CSS_SELECTOR, ".exhibitor__title h3").text.strip()
+            country = card.find_element(By.CSS_SELECTOR, ".exhibitor__h-info .m-tag--country .m-tag__txt").text.strip()
+
+            # --- Data from collapsible part (Body) ---
+            location_zone = "N/A"
+            description = "N/A"
+            
             try:
                 header = card.find_element(By.CSS_SELECTOR, ".exhibitor__header")
-                # Check if the body is already visible
                 body = card.find_element(By.CSS_SELECTOR, ".exhibitor__body")
                 if not body.is_displayed():
                     driver.execute_script("arguments[0].click();", header)
@@ -67,30 +72,33 @@ def parse_exhibitors(driver):
                     WebDriverWait(driver, 5).until(
                         lambda d: body.is_displayed()
                     )
+                
+                # Now that it's visible, extract the data using Selenium
+                location_zone_element = body.find_element(By.CSS_SELECTOR, ".exhibitor__place p")
+                location_zone = location_zone_element.text.strip().replace('\n', ' ').strip()
+
+                description_element = body.find_element(By.CSS_SELECTOR, ".exhibitor__description p")
+                description = description_element.text.strip()
+
             except Exception as e:
-                print(f"⚠️ Could not expand dropdown for card {i}: {e}")
-
-            # Parse the HTML with BeautifulSoup
-            soup = BeautifulSoup(card.get_attribute("outerHTML"), "html.parser")
-
-            name = soup.select_one(".exhibitor__title h3")
-            country = soup.select_one(".exhibitor__h-info .m-tag--country .m-tag__txt")
-            location_zone = soup.select_one(".exhibitor__place p")
-            description = soup.select_one(".exhibitor__description p")
+                print(f"⚠️ Could not get description/location for card {i} ({name}): {e}")
 
             exhibitors.append({
-                "Company Name": name.get_text(strip=True) if name else "N/A",
-                "Country": country.get_text(strip=True) if country else "N/A",
-                "Location & Zone": location_zone.get_text(strip=True).replace('\n', ' ').strip() if location_zone else "N/A",
-                "Description": description.get_text(strip=True) if description else "N/A"
+                "Company Name": name,
+                "Country": country,
+                "Location & Zone": location_zone,
+                "Description": description
             })
 
-            print(f"{i}: {exhibitors[-1]['Company Name']} | {exhibitors[-1]['Country']}")
+            # This print statement is for user feedback in the terminal
+            print(f"{i}: {name} | {country} | {location_zone} | Description found: {description != 'N/A'}")
 
         except Exception as e:
+            # This will catch errors if the main card structure is different
             print(f"❌ Error parsing card {i}: {e}")
 
     return exhibitors
+
 
 def main():
     driver = make_driver(headless=False)
