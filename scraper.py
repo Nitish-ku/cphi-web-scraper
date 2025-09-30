@@ -9,7 +9,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 
-URL = "https://exhibitors.cphi.com/cpww25/"
+URL = "https://exhibitors.cphi.com/cpin25/"
 
 def make_driver(headless=False):
     options = webdriver.ChromeOptions()
@@ -17,7 +17,11 @@ def make_driver(headless=False):
         options.add_argument("--headless=new")
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
-    return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    # Set longer timeouts to handle slow page responses under heavy load
+    driver.set_page_load_timeout(60)
+    driver.set_script_timeout(60)
+    return driver
 
 def handle_cookie_banner(driver):
     """Waits for and clicks the cookie acceptance button."""
@@ -98,7 +102,9 @@ def main():
                     exhibitor_data = parse_card_details(driver, card)
                     if exhibitor_data:
                         all_exhibitors_data.append(exhibitor_data)
-
+            except TimeoutException:
+                print("⚠️ Timed out processing a card. The page is very slow. Skipping and continuing.")
+                continue
             except NoSuchElementException:
                 print("Could not find a unique ID for a card, it might be structured differently. Skipping.")
                 continue
@@ -107,7 +113,7 @@ def main():
 
         # Try to find and click the 'Show more results' button
         try:
-            show_more_button = WebDriverWait(driver, 5).until(
+            show_more_button = WebDriverWait(driver, 10).until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, ".paging a.button"))
             )
             driver.execute_script("arguments[0].scrollIntoView();", show_more_button)
